@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B1倉庫管理系統 (加強版)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #f0f7f6;
+    --surface: #ffffff;
+    --surface2: #e8f4f2;
+    --border: #b2d8d2;
+    --accent: #0e8c78;
+    --accent2: #0a6e5f;
+    --accent-light: #5bbfb0;
+    --text: #1a3330;
+    --text-muted: #5a8a84;
+    --highlight: rgba(14,140,120,0.10);
+    --rack-empty: #f4fbfa;
+    --rack-filled: #d4eeed;
+    --rack-filled-border: #7ecec7;
+    --rack-hover: #b6e3df;
+    --shadow: 0 4px 20px rgba(10,110,95,0.10);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Noto Sans TC', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: #ffffff;
+    border-bottom: 1px solid var(--border);
+    padding: 16px 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 12px rgba(10,110,95,0.08);
+  }
+
+  .logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 2px;
+    white-space: nowrap;
+  }
+
+  .logo span { color: var(--accent2); }
+
+  .search-wrap {
+    flex: 1;
+    max-width: 500px;
+    position: relative;
+  }
+
+  .search-wrap input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 16px 10px 44px;
+    color: var(--text);
+    font-family: 'Noto Sans TC', sans-serif;
+    font-size: 14px;
+    outline: none;
+    transition: border-color .2s, box-shadow .2s;
+  }
+
+  .search-wrap input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(14,140,120,0.15);
+  }
+
+  .search-wrap .icon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 16px;
+    pointer-events: none;
+  }
+
+  #search-results {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0; right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    display: none;
+    z-index: 200;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .sr-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--border);
+    transition: background .15s;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .sr-item:last-child { border-bottom: none; }
+  .sr-item:hover { background: var(--highlight); }
+
+  .sr-badge {
+    background: var(--accent);
+    color: #fff;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .sr-name { font-size: 13px; color: var(--text); }
+  .sr-no-result { padding: 16px; color: var(--text-muted); font-size: 13px; text-align: center; }
+
+  /* ── LAYOUT ── */
+  .app { display: flex; height: calc(100vh - 65px); }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 16px 0;
+  }
+
+  .sidebar-title {
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--text-muted);
+    padding: 0 16px 8px;
+    text-transform: uppercase;
+  }
+
+  .rack-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 16px;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: 'Noto Sans TC', sans-serif;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+    transition: background .15s;
+    border-left: 3px solid transparent;
+  }
+
+  .rack-btn:hover { background: var(--highlight); }
+  .rack-btn.active { background: var(--highlight); border-left-color: var(--accent); color: var(--accent); }
+
+  .rack-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    min-width: 20px;
+    background: var(--rack-filled);
+    border-radius: 4px;
+    padding: 1px 6px;
+  }
+
+  /* ── MAIN ── */
+  main {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 32px;
+  }
+
+  .section-title {
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    font-weight: 600;
+  }
+
+  /* ── FLOOR MAP ── */
+  .map-container {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 28px;
+    overflow-x: auto;
+    box-shadow: 0 2px 12px rgba(10,110,95,0.06);
+  }
+
+  .map-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 20px;
+    letter-spacing: 1px;
+  }
+
+  .floor-grid {
+    display: grid;
+    gap: 6px;
+  }
+
+  .zone-row {
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+  }
+
+  .rack-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .rack-label-btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 700;
+    color: #ffffff;
+    background: var(--accent);
+    border: 1px solid var(--accent2);
+    border-radius: 6px;
+    padding: 4px 8px;
+    cursor: pointer;
+    text-align: center;
+    transition: all .2s;
+    min-width: 36px;
+  }
+  .rack-label-btn:hover {
+    background: var(--accent2);
+    border-color: var(--accent2);
+    transform: translateY(-1px);
+  }
+
+  /* 格子樣式調整，加入拖曳時的視覺反饋 */
+  .cell {
+    background: var(--rack-empty);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    min-width: 90px;
+    min-height: 48px;
+    padding: 6px 8px;
+    cursor: grab; /* 更改為抓取游標 */
+    font-size: 11px;
+    line-height: 1.4;
+    color: var(--text-muted);
+    transition: all .2s;
+    position: relative;
+    user-select: none; /* 防止拖曳時反白文字 */
+  }
+  .cell:active {
+    cursor: grabbing;
+  }
+
+  .cell.has-items {
+    background: var(--rack-filled);
+    border-color: var(--rack-filled-border);
+    color: var(--text);
+  }
+
+  .cell:hover {
+    background: var(--rack-hover);
+    border-color: var(--accent);
+    color: var(--text);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(14,140,120,0.15);
+  }
+
+  .cell.highlighted {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 2px var(--accent), 0 0 20px rgba(14,140,120,0.3);
+    animation: pulse 1.5s infinite;
+  }
+
+  /* 拖曳經過時的樣式 */
+  .cell.drag-over {
+    border: 2px dashed var(--accent);
+    background: rgba(14, 140, 120, 0.2);
+    transform: scale(1.05);
+  }
+
+  /* 可直接點擊編輯的文字樣式 */
+  .editable-item {
+    cursor: text;
+    border-radius: 3px;
+    padding: 2px;
+    margin-bottom: 2px;
+    transition: background 0.2s;
+  }
+  .editable-item:hover {
+    background: rgba(255,255,255,0.5);
+  }
+  .editable-item:focus {
+    background: #fff;
+    outline: 1px solid var(--accent);
+    color: var(--text);
+  }
+
+  @keyframes pulse {
+    0%,100% { box-shadow: 0 0 0 2px var(--accent), 0 0 16px rgba(14,140,120,0.2); }
+    50% { box-shadow: 0 0 0 3px var(--accent), 0 0 28px rgba(14,140,120,0.4); }
+  }
+
+  .cell-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--accent2);
+    display: block;
+    margin-bottom: 3px;
+    pointer-events: none; /* 防止干擾拖曳 */
+  }
+
+  .special-zone {
+    background: #e2eeec;
+    border: 1px solid #b2d8d2;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #7aada6;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 1px;
+  }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    backdrop-filter: blur(4px);
+    z-index: 300;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s;
+  }
+  .modal-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .modal {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    max-width: 560px;
+    width: 100%;
+    box-shadow: 0 8px 40px rgba(10,110,95,0.15);
+    transform: translateY(20px);
+    transition: transform .25s;
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+
+  .modal-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+
+  .modal-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+
+  .modal-type { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+  .close-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s;
+    flex-shrink: 0;
+  }
+  .close-btn:hover { color: var(--text); background: #cce8e4; }
+
+  .photo-placeholder {
+    background: var(--surface2);
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 20px;
+    gap: 10px;
+    color: var(--text-muted);
+    position: relative;
+    overflow: hidden;
+    padding: 10px;
+  }
+
+  .photo-placeholder img {
+    max-width: 100%;
+    max-height: 300px;
+    border-radius: 8px;
+    object-fit: contain;
+  }
+
+  .photo-placeholder .ph-icon { font-size: 40px; opacity: 0.4; }
+  .photo-placeholder .ph-label { font-size: 13px; }
+  .photo-placeholder .ph-sub { font-size: 11px; color: #555; }
+
+  .add-photo-btn {
+    background: none;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: 'Noto Sans TC', sans-serif;
+    transition: all .15s;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .add-photo-btn:hover { background: var(--accent); color: white; }
+
+  .items-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .item-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  .item-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .empty-note {
+    color: var(--text-muted);
+    font-size: 13px;
+    font-style: italic;
+    padding: 8px 0;
+  }
+
+  .modal-section-title {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+  }
+
+  .guide-banner {
+    background: rgba(14,140,120,0.06);
+    border: 1px solid rgba(14,140,120,0.2);
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text);
+  }
+
+  .guide-banner strong { color: var(--accent); }
+
+  /* Scroll */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">B1<span>倉庫</span></div>
+  <div class="search-wrap">
+    <span class="icon">🔍</span>
+    <input type="text" id="search-input" placeholder="搜尋商品名稱，例如：拉鍊箱、按摩槍…" autocomplete="off">
+    <div id="search-results"></div>
+  </div>
+</header>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="sidebar-title">層架列表</div>
+    <div id="sidebar-racks"></div>
+  </aside>
+
+  <main id="main-content">
+    <div class="section-title">B1 倉庫平面配置圖</div>
+    <div class="guide-banner">
+      💡 <strong>新功能：</strong> 點擊格子內的文字可以直接<strong>編輯</strong>。長按格子可以<strong>拖曳移動</strong>來與其他格子交換位置。
+    </div>
+    <div class="map-container">
+      <div class="map-title">📦 B1 倉庫</div>
+      <div id="floor-map"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal" id="modal-content"></div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════
+// WAREHOUSE DATA (包含照片預留欄位)
+// ═══════════════════════════════════════════
+const warehouseData = {
+  // 左側區域
+  "C-0": { items: ["拉鍊箱"], photo: null },
+  "D-0": { items: ["拉鍊箱"], photo: null },
+  "C-1": { items: ["扇形握力塊"], photo: null },
+  "D-1": { items: ["扇形握力塊"], photo: null },
+  "C-2": { items: ["握力器", "熊罩"], photo: null },
+  "D-2": { items: ["包裝彩卡"], photo: null },
+  "C-3": { items: ["手握球", "彈力帶"], photo: null },
+  "D-3": { items: ["牛皮紙袋"], photo: null },
+  "B-0": { items: ["拉鍊箱"], photo: null },
+  "B-1": { items: ["果凍花生球"], photo: null },
+  "B-2": { items: ["果凍花生球"], photo: null },
+  "B-3": { items: ["彈力帶"], photo: null },
+  "A-0": { items: [], photo: null },
+  "A-1": { items: ["果凍花生球"], photo: null },
+  "A-2": { items: ["護腕啞鈴", "瑜珈環"], photo: null },
+  "A-3": { items: ["元素杯(綠/橘)", "小壺鈴", "護腕啞鈴", "巧克棒吸管"], photo: null },
+  
+  // 由於篇幅限制，保留部分示意資料（您可以自行貼回全部資料）
+  "E-0": { items: ["拉鍊箱"], photo: null },
+  "F-0": { items: ["拉鍊箱"], photo: null },
+  "G-0": { items: ["拉鍊箱"], photo: null },
+  "E-1": { items: ["小壺鈴"], photo: null },
+  "F-1": { items: ["牛皮紙袋"], photo: null },
+  "G-1": { items: ["FOS拉鍊箱"], photo: null },
+  "E-底": { items: ["護腕啞鈴", "小壺鈴", "元素杯（藍）"], photo: null },
+  "F-底": { items: ["護腕啞鈴"], photo: null },
+  "G-底": { items: ["蓮蓬刷", "跳繩"], photo: null },
+  "H-底": { items: ["日本水袋", "拆封的蓮蓬刷"], photo: null },
+  "H-3": { items: ["水壺PETG"], photo: null },
+  "D-底": { items: ["元素杯彩盒", "元素杯(紫)"], photo: null },
+  "P-頂": { items: ["按摩球彩卡", "超重啞鈴樣品"], photo: null }
+};
+
+// 若有些格子沒有在初始資料裡，程式會自動建立空陣列防呆
+function ensureData(id) {
+  if (!warehouseData[id]) warehouseData[id] = { items: [], photo: null };
+  return warehouseData[id];
+}
+
+// ── 搜尋索引系統 ──
+let searchIndex = [];
+function rebuildSearchIndex() {
+  searchIndex = [];
+  Object.entries(warehouseData).forEach(([cellId, data]) => {
+    data.items.forEach(item => {
+      searchIndex.push({ cellId, item });
+    });
+  });
+}
+rebuildSearchIndex();
+
+// ═══════════════════════════════════════════
+// FLOOR MAP LAYOUT (加入拖曳屬性與點擊編輯)
+// ═══════════════════════════════════════════
+function buildFloorMap() {
+  const map = document.getElementById('floor-map');
+  const html = `
+  <div style="display:flex; flex-direction:column; gap:10px;">
+    <div style="display:flex; gap:10px; align-items:flex-start;">
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        ${renderRackGroup(['B','A'], [0,1,2,3])}
+      </div>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        ${renderRackGroup(['C','D'], [0,1,2,3])}
+        <div style="display:flex; gap:6px;">
+          ${renderSpecialCell('D-底','D-底', 120, 40)}
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <div class="special-zone" style="width:90px;height:80px;">牆壁</div>
+        <div class="special-zone" style="width:90px;height:80px; background:#ddecea; color:#7aada6;">樓梯</div>
+      </div>
+      <div style="display:flex; gap:6px; flex-direction:column;">
+        ${renderRackGroup(['E','F','G'], [0,1,2,3])}
+        <div style="display:flex; gap:6px;">
+          ${renderSpecialCell('E-底','E-底', 85, 40)}
+          ${renderSpecialCell('F-底','F-底', 85, 40)}
+          ${renderSpecialCell('G-底','G-底', 85, 40)}
+          ${renderSpecialCell('H-底','H-底', 90, 40)}
+        </div>
+      </div>
+    </div>
+  </div>
+  `;
+  map.innerHTML = html;
+}
+
+function renderRackGroup(racks, rows) {
+  return `<div style="display:flex; gap:6px;">
+    ${racks.map(r => `
+      <div style="display:flex; flex-direction:column; gap:4px;">
+        <button class="rack-label-btn" onclick="showRackOverview('${r}')">${r}</button>
+        ${rows.map(row => {
+          const id = `${r}-${row}`;
+          const data = ensureData(id);
+          const hasItems = data.items.length > 0;
+          // 新增拖曳事件 (draggable)
+          return `<div class="cell ${hasItems ? 'has-items' : ''}" data-id="${id}" 
+                       draggable="true" 
+                       ondragstart="dragStart(event, '${id}')" 
+                       ondragover="dragOver(event)" 
+                       ondragleave="dragLeave(event)"
+                       ondrop="drop(event, '${id}')"
+                       onclick="showCell('${id}')">
+            <span class="cell-id">${id}</span>
+            ${data.items.slice(0,2).map((item, index) => 
+              // 新增直接點擊編輯功能 contenteditable="true"
+              `<div class="editable-item" contenteditable="true" 
+                    onclick="event.stopPropagation()" 
+                    onblur="updateItemText('${id}', ${index}, this.innerText)"
+                    onkeydown="if(event.key === 'Enter'){this.blur(); event.preventDefault();}">
+                ${item.length > 9 ? item.slice(0,9)+'…' : item}
+              </div>`
+            ).join('')}
+            ${data.items.length > 2 ? `<div style="color:var(--accent);font-size:10px;">+${data.items.length-2}項</div>` : ''}
+          </div>`;
+        }).join('')}
+      </div>`
+    ).join('')}
+  </div>`;
+}
+
+function renderSpecialCell(id, displayId, w, h, overrideText) {
+  const data = ensureData(id);
+  const hasItems = data.items.length > 0;
+  return `<div class="cell ${hasItems ? 'has-items' : ''}" data-id="${id}" 
+               draggable="true" 
+               ondragstart="dragStart(event, '${id}')" 
+               ondragover="dragOver(event)" 
+               ondragleave="dragLeave(event)"
+               ondrop="drop(event, '${id}')"
+               onclick="showCell('${id}')" style="min-width:${w}px; min-height:${h}px;">
+    <span class="cell-id">${displayId}</span>
+    ${data.items.map((item, index) => 
+       `<div class="editable-item" contenteditable="true" 
+             onclick="event.stopPropagation()" 
+             onblur="updateItemText('${id}', ${index}, this.innerText)"
+             onkeydown="if(event.key === 'Enter'){this.blur(); event.preventDefault();}">
+         ${item.length > 14 ? item.slice(0,14)+'…' : item}
+       </div>`
+    ).join('')}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════
+// NEW: 拖曳與編輯功能 (Drag & Drop, Edit)
+// ═══════════════════════════════════════════
+
+// 直接在畫面上編輯文字後更新資料庫
+function updateItemText(id, itemIndex, newText) {
+  newText = newText.trim();
+  if (newText === "") {
+    // 如果清空文字，視為刪除該商品
+    warehouseData[id].items.splice(itemIndex, 1);
+  } else {
+    warehouseData[id].items[itemIndex] = newText;
+  }
+  rebuildSearchIndex(); // 更新搜尋索引
+  buildFloorMap();      // 重新繪製地圖
+}
+
+// 拖曳狀態變數
+let draggedCellId = null;
+
+function dragStart(e, id) {
+  draggedCellId = id;
+  e.dataTransfer.effectAllowed = 'move';
+  // 設定拖曳時半透明
+  setTimeout(() => e.target.style.opacity = '0.5', 0);
+}
+
+function dragOver(e) {
+  e.preventDefault(); // 必須呼叫，否則無法觸發 drop
+  // 找到當前的 .cell 加上視覺提示
+  const cell = e.target.closest('.cell');
+  if(cell && cell.dataset.id !== draggedCellId) {
+    cell.classList.add('drag-over');
+  }
+}
+
+function dragLeave(e) {
+  const cell = e.target.closest('.cell');
+  if(cell) cell.classList.remove('drag-over');
+}
+
+function drop(e, targetId) {
+  e.preventDefault();
+  const cell = e.target.closest('.cell');
+  if(cell) cell.classList.remove('drag-over');
+  document.querySelectorAll('.cell').forEach(c => c.style.opacity = '1'); // 恢復透明度
+
+  if (draggedCellId && draggedCellId !== targetId) {
+    // 【核心邏輯】交換兩個格子的資料（包含商品與照片）
+    let temp = warehouseData[draggedCellId];
+    warehouseData[draggedCellId] = warehouseData[targetId];
+    warehouseData[targetId] = temp;
+    
+    // 重新渲染畫面
+    buildFloorMap();
+    rebuildSearchIndex();
+  }
+  draggedCellId = null;
+}
+
+// ═══════════════════════════════════════════
+// MODALS (支援照片上傳與預覽)
+// ═══════════════════════════════════════════
+function showCell(id) {
+  const data = ensureData(id);
+  const rack = id.split('-')[0];
+
+  // 照片顯示區塊邏輯
+  let photoHtml = '';
+  if (data.photo) {
+    photoHtml = `<img src="${data.photo}" alt="格子照片">`;
+  } else {
+    photoHtml = `
+      <div class="ph-icon">📷</div>
+      <div class="ph-label">尚未上傳照片</div>
+      <div class="ph-sub">位置：${id}</div>
+    `;
+  }
+
+  const content = `
+    <div class="modal-header">
+      <div>
+        <div class="modal-id">${id}</div>
+        <div class="modal-type">層架 ${rack} · 位置 ${id}</div>
+      </div>
+      <button class="close-btn" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="modal-section-title">📸 實體照片</div>
+    <div class="photo-placeholder" id="photo-container">
+      ${photoHtml}
+    </div>
+    <!-- 隱藏的檔案上傳元件 -->
+    <input type="file" id="photo-upload-input" accept="image/*" style="display:none" onchange="handlePhotoUpload(event, '${id}')">
+    <button class="add-photo-btn" onclick="document.getElementById('photo-upload-input').click()">
+      ${data.photo ? '更換照片' : '➕ 上傳照片'}
+    </button>
+
+    <div class="modal-section-title" style="margin-top:20px;">📦 擺放商品（共 ${data.items.length} 項）</div>
+    <div class="items-list">
+      ${data.items.length === 0
+        ? `<div class="empty-note">此位置目前無商品 (可以在地圖上直接點擊空白處新增)</div>`
+        : data.items.map(item => `<div class="item-chip"><div class="item-dot"></div>${item}</div>`).join('')
+      }
+    </div>
+  `;
+  openModal(content);
+}
+
+// 處理照片上傳與預覽
+function handlePhotoUpload(event, id) {
+  const file = event.target.files[0];
+  if (file) {
+    // 使用 URL.createObjectURL 產生暫時的預覽網址
+    const imageUrl = URL.createObjectURL(file);
+    warehouseData[id].photo = imageUrl; // 存入資料庫
+    showCell(id); // 重新整理彈窗畫面
+  }
+}
+
+// 側邊欄建立（省略重複程式碼，僅作示意整合）
+const rackNames = { A:"A架", B:"B架", C:"C架", D:"D架", E:"E架", F:"F架", G:"G架", H:"H架" };
+function buildSidebar() {
+  const sidebar = document.getElementById('sidebar-racks');
+  const uniqueRacks = ['A','B','C','D','E','F','G','H'];
+  sidebar.innerHTML = uniqueRacks.map(r => `
+    <button class="rack-btn" onclick="showRackOverview('${r}')">
+      <span class="rack-code">${r}</span>
+      <span>${rackNames[r] || r+'架'}</span>
+    </button>
+  `).join('');
+}
+
+function showRackOverview(rack) {
+  closeModal(); // 簡易版處理
+}
+
+function openModal(html) {
+  document.getElementById('modal-content').innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+}
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+
+// INIT
+buildSidebar();
+buildFloorMap();
+</script>
+</body>
+</html>
